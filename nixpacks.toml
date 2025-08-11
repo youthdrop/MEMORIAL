@@ -1,13 +1,14 @@
-[phases.setup]
+[setup]
 nixPkgs = ["python311", "nodejs_20"]
 
-[phases.install]
+[install]
 cmds = [
-  "pip install -r backend/requirements.txt",
+  "python -m pip install --upgrade pip",
+  "python -m pip install -r backend/requirements.txt",
   "cd frontend && npm ci"
 ]
 
-[phases.build]
+[build]
 cmds = [
   "cd frontend && npm run build"
 ]
