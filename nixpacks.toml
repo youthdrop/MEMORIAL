@@ -1,3 +1,7 @@
+[providers]
+python = "3.11"
+node   = "20"
+
 [setup]
 nixPkgs = ["python311", "nodejs_20"]
 
