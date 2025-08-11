@@ -1,4 +1,4 @@
-providers = ["python", "node"]
+providers = ["python"]  # <-- drop "node" to avoid Nixpacks adding its own npm
 
 [phases.setup]
 nixPkgs = ["python311", "python311Packages.pip", "nodejs_20"]
