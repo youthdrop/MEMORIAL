@@ -1,23 +1,17 @@
-# nixpacks.toml  (repo root)
+[setup]
+nixPkgs = ["python311", "python311Packages.pip", "nodejs_20"]
 
-[phases.setup]
-# Install Python & Node into the build image
-nixPkgs = ["python311", "nodejs_20"]
-
-[phases.install]
-# Install Python deps and frontend deps
+[install]
 cmds = [
-  "python -m pip install --upgrade pip",
-  "python -m pip install -r backend/requirements.txt",
+  "pip install --upgrade pip",
+  "pip install -r backend/requirements.txt",
   "cd frontend && npm ci"
 ]
 
-[phases.build]
-# Build the Vite app into frontend/dist
+[build]
 cmds = [
   "cd frontend && npm run build"
 ]
 
 [start]
-# Start Flask via gunicorn from the backend folder
-cmd = "cd backend && gunicorn -w 3 -k gthread -b 0.0.0.0:${PORT} app:app"
+cmd = "cd backend && gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
