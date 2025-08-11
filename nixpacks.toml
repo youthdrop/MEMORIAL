@@ -1,17 +1,24 @@
-providers = ["python"]  # Node comes from nixPkgs to avoid npm conflicts
+providers = ["python"]  # Node comes via nixPkgs; avoid npm collisions
 
 [phases.setup]
-nixPkgs = ["python311", "python311Packages.pip", "nodejs_20"]
+# Python + virtualenv + Node 20 for the frontend
+nixPkgs = ["python311", "python311Packages.virtualenv", "nodejs_20"]
 
 [phases.install]
 cmds = [
-  "pip install --upgrade pip setuptools wheel",
-  "pip install -r backend/requirements.txt",
+  # Create project-local virtualenv
+  "python -m venv .venv",
+  # Install backend deps inside the venv
+  "bash -lc 'source .venv/bin/activate && pip install -r backend/requirements.txt'",
+  # Install frontend deps
   "cd frontend && npm ci"
 ]
 
 [phases.build]
-cmds = ["cd frontend && npm run build"]
+cmds = [
+  "cd frontend && npm run build"
+]
 
 [start]
-cmd = "cd backend && gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
+# Activate venv and start Gunicorn from backend
+cmd = "bash -lc 'source .venv/bin/activate && cd backend && gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app'"
