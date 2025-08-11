@@ -1,21 +1,17 @@
-# Use only the python provider; we bring Node via nixPkgs to avoid npm conflicts.
-providers = ["python"]
+providers = ["python"]  # Node comes from nixPkgs to avoid npm conflicts
 
 [phases.setup]
-# Add Python + Node + curl so we can bootstrap pip if needed
-nixPkgs = ["python311", "nodejs_20", "curl"]
+nixPkgs = ["python311", "python311Packages.pip", "nodejs_20"]
 
 [phases.install]
 cmds = [
-  # 1) Try ensurepip (may be disabled in Nix)
-  "python -m ensurepip --upgrade || true",
+  "pip install --upgrade pip setuptools wheel",
+  "pip install -r backend/requirements.txt",
+  "cd frontend && npm ci"
+]
 
-  # 2) If pip still missing, bootstrap with get-pip.py (works reliably)
-  "if ! command -v pip >/dev/null 2>&1; then curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py && python /tmp/get-pip.py; fi",
+[phases.build]
+cmds = ["cd frontend && npm run build"]
 
-  # 3) Upgrade toolchain & install backend deps
-  "python -m pip install --upgrade pip setuptools wheel",
-  "python -m pip install --no-cache-dir -r backend/requirements.txt",
-
-  # 4) Frontend deps
-  "c
+[start]
+cmd = "cd backend && gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
