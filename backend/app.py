@@ -1,24 +1,32 @@
+# backend/app.py
 import os
 import logging
-from flask import Flask, jsonify, send_from_directory, request, redirect, abort
+from flask import Flask, jsonify, request, redirect, abort, send_from_directory
 from flask_cors import CORS
+from flask_migrate import Migrate
+
+# Your project modules
 from config import settings
 from models import db, User
 from auth import auth_bp, bcrypt, jwt
 from routes.participants import bp as participants_bp
 from routes.nested import bp_nested
 from routes.reports import reports_bp
-from flask_migrate import Migrate
-from dotenv import load_dotenv
 
-load_dotenv()
+# .env is nice in dev; safe to skip if not present in prod
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
 
-# ✅ Point to ../frontend/dist relative to this file
+# Resolve the absolute path to ../frontend/dist (Vite build output)
 HERE = os.path.dirname(os.path.abspath(__file__))
 DIST_DIR = os.path.join(HERE, "..", "frontend", "dist")
 
-def create_app():
-    # use absolute path so it works no matter where you run from
+
+def create_app() -> Flask:
+    # Serve static from the absolute dist path so it works anywhere
     app = Flask(__name__, static_folder=DIST_DIR, static_url_path="/")
 
     # --- Logging ---
@@ -26,9 +34,9 @@ def create_app():
     app.logger.setLevel(logging.INFO)
 
     # --- Config ---
-    app.config['SQLALCHEMY_DATABASE_URI'] = settings.SQLALCHEMY_DATABASE_URI
-    app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-    app.config['JWT_SECRET_KEY'] = settings.JWT_SECRET_KEY or "dev-only"
+    app.config["SQLALCHEMY_DATABASE_URI"] = settings.SQLALCHEMY_DATABASE_URI
+    app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["JWT_SECRET_KEY"] = settings.JWT_SECRET_KEY or "dev-only"
 
     # --- Extensions ---
     db.init_app(app)
@@ -44,10 +52,10 @@ def create_app():
             r"/api/*": {"origins": origins},
             r"/api/v1/*": {"origins": origins},
         },
-        supports_credentials=False
+        supports_credentials=False,
     )
 
-    # --- Blueprints (mounted at /api) ---
+    # --- Blueprints mounted at /api ---
     app.register_blueprint(auth_bp, url_prefix="/api")
     app.register_blueprint(participants_bp, url_prefix="/api")
     app.register_blueprint(bp_nested, url_prefix="/api")
@@ -62,144 +70,117 @@ def create_app():
     def whoami():
         return jsonify(
             env=os.getenv("FLASK_ENV", "production"),
-            db_uri_configured=bool(app.config.get('SQLALCHEMY_DATABASE_URI')),
-            jwt_key_set=bool(app.config.get('JWT_SECRET_KEY')),
+            db_uri_configured=bool(app.config.get("SQLALCHEMY_DATABASE_URI")),
+            jwt_key_set=bool(app.config.get("JWT_SECRET_KEY")),
         ), 200
 
-    # --- Helpful error handlers (JSON always) ---
+    # --- Helpful error handlers (JSON for API only) ---
     @app.errorhandler(400)
     @app.errorhandler(401)
     @app.errorhandler(403)
-    @app.errorhandler(404)
     @app.errorhandler(405)
     @app.errorhandler(500)
-    def handle_errors(err):
-        code = getattr(err, "code", 500)
-        app.logger.exception(err)
-        return jsonify(error=str(err), code=code), code
+    def handle_api_errors(err):
+        # Only JSON-format API routes; let SPA/static behave normally
+        if request.path.startswith("/api"):
+            code = getattr(err, "code", 500)
+            app.logger.exception(err)
+            return jsonify(error=str(err), code=code), code
+        return err  # non-API: default behavior (no noisy logs for 404s)
 
-    # --- Static asset routes for Vite build ---
+    # -------- Static & SPA (Vite) --------
+
+    # Serve asset files from dist/assets
     @app.route("/assets/<path:filename>")
-    def assets(filename):
+    def vite_assets(filename):
         assets_dir = os.path.join(app.static_folder, "assets")
         full = os.path.join(assets_dir, filename)
         if not os.path.exists(full):
             abort(404)
         return send_from_directory(assets_dir, filename)
 
+    # Optional files: quietly 404 if missing
     @app.route("/favicon.ico")
     def favicon():
-        path = os.path.join(app.static_folder, "favicon.ico")
-        if os.path.exists(path):
+        f = os.path.join(app.static_folder, "favicon.ico")
+        if os.path.exists(f):
             return send_from_directory(app.static_folder, "favicon.ico")
         abort(404)
 
     @app.route("/manifest.webmanifest")
-    def manifest():
-        path = os.path.join(app.static_folder, "manifest.webmanifest")
-        if os.path.exists(path):
+    def webmanifest():
+        m = os.path.join(app.static_folder, "manifest.webmanifest")
+        if os.path.exists(m):
             return send_from_directory(app.static_folder, "manifest.webmanifest")
         abort(404)
 
-    # --- Root: serve index.html if present ---
-    @app.route("/")
-    def index():
+    # SPA fallback: serve actual file if present, else index.html
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def spa(path):
+        # never swallow API routes
+        if path.startswith("api/"):
+            abort(404)
+
+        candidate = os.path.join(app.static_folder, path)
+        if path and os.path.exists(candidate):
+            return send_from_directory(app.static_folder, path)
+
         index_path = os.path.join(app.static_folder, "index.html")
         if os.path.exists(index_path):
             return send_from_directory(app.static_folder, "index.html")
-        return "API is running. Try GET /api/health", 200
+
+        # If dist is missing (bad build), show a clear message
+        return "Frontend build missing. Did Vite run?", 500
 
     return app
 
 
 app = create_app()
 
-# ✅ Aliases & compatibility
-# ✅ Aliases & compatibility
+# ✅ Aliases & compatibility (keep POST bodies via 307)
 @app.before_request
-def route_aliases():
-    # Let CORS preflight pass
-    if request.method == "OPTIONS":
-        return None
+def apiv1_alias():
+    # Alias /api/v1/* → /api/*
+    if request.path.startswith("/api/v1/"):
+        return redirect(request.path.replace("/api/v1", "/api", 1), code=307)
 
-    path = request.path
-
-    # /api/v1/* → /api/*
-    if path.startswith("/api/v1/"):
-        return redirect(path.replace("/api/v1", "/api", 1), code=307)
-
-    # 🔐 Auth: map old login paths to the actual /api/login
-    if path in ("/api/auth/login", "/api/v1/auth/login"):
-        return redirect("/api/login", code=307)  # 307 keeps POST + body
-
-    # Participants collection alias (frontend uses /api/participants)
-    if path == "/api/participants":
-        return redirect("/api", code=307)
-
-    # Participants nested aliases (…/participants/<pid>[/*])
-    if path.startswith("/api/participants/"):
-        parts = path.strip("/").split("/")
-        if len(parts) >= 3 and parts[2].isdigit():
-            pid = parts[2]
-            if len(parts) == 3:
-                return redirect(f"/api/{pid}", code=307)
-            resource = parts[3]
-            allowed = {
-                "casenotes", "services", "referrals",
-                "assessments", "employment", "education",
-                "milestones", "enrollments", "outcomes"
-            }
-            if resource in allowed:
-                qs = request.query_string.decode("utf-8")
-                pid_qs = f"pid={pid}"
-                new_qs = f"{qs}&{pid_qs}" if qs else pid_qs
-                if resource == "referrals" and len(parts) >= 5 and parts[4].isdigit():
-                    rid = parts[4]
-                    return redirect(f"/api/referrals/{rid}?{new_qs}", code=307)
-                return redirect(f"/api/{resource}?{new_qs}", code=307)
-
-    return None
+    # Example extra alias (uncomment if your frontend still posts here):
+    # if request.path in ("/api/participants", "/api/v1/participants"):
+    #     return redirect("/api", code=307)
 
 
+# --- Optional: auto-create tables & seed admin on first boot (Railway friendly) ---
+if os.getenv("AUTO_CREATE_DB", "1") == "1":
+    with app.app_context():
+        try:
+            db.create_all()
+            if not User.query.filter_by(email="admin@stocktonmemorial.org").first():
+                u = User(name="Admin", email="admin@stocktonmemorial.org", role="admin")
+                u.password_hash = bcrypt.generate_password_hash("ChangeMe123!").decode("utf-8")
+                db.session.add(u)
+                db.session.commit()
+                app.logger.info("Seeded admin user.")
+            app.logger.info("DB ready (auto-create).")
+        except Exception as e:
+            app.logger.exception("DB init failed on boot")
 
-# 🟡 Debug: print all routes on boot
-with app.app_context():
-    print("== ROUTES ==")
-    for r in app.url_map.iter_rules():
-        print(r)
 
-# (Optional) confirm admin user exists
-@app.route("/api/_debug/user")
-def _debug_user():
-    u = User.query.filter_by(email="admin@stocktonmemorial.org").first()
-    return {
-        "exists": bool(u),
-        "has_password_hash": bool(getattr(u, "password_hash", None)) if u else False
-    }, 200
-
-# --- SPA fallback for React Router ---
-@app.route("/<path:path>")
-def spa_fallback(path):
-    if path.startswith("api/"):
-        abort(404)
-    index_path = os.path.join(app.static_folder, "index.html")
-    if os.path.exists(index_path):
-        return send_from_directory(app.static_folder, "index.html")
-    abort(404)
-
-# --- CLI: init DB & seed admin ---
-@app.cli.command('initdb')
+# --- CLI seed (still handy locally) ---
+@app.cli.command("initdb")
 def initdb():
     with app.app_context():
         db.create_all()
-        if not User.query.filter_by(email='admin@stocktonmemorial.org').first():
-            u = User(name='Admin', email='admin@stocktonmemorial.org', role='admin')
-            u.password_hash = bcrypt.generate_password_hash('ChangeMe123!').decode('utf-8')
+        if not User.query.filter_by(email="admin@stocktonmemorial.org").first():
+            u = User(name="Admin", email="admin@stocktonmemorial.org", role="admin")
+            u.password_hash = bcrypt.generate_password_hash("ChangeMe123!").decode("utf-8")
             db.session.add(u)
             db.session.commit()
-            print('Admin created: admin@stocktonmemorial.org / ChangeMe123!')
-        print('DB ready')
+            print("Admin created: admin@stocktonmemorial.org / ChangeMe123!")
+        print("DB ready")
 
-if __name__ == '__main__':
-    # run from the backend folder:  python app.py
-    app.run(host='0.0.0.0', port=int(os.getenv('PORT', 8080)), debug=True)
+
+if __name__ == "__main__":
+    # Local dev run (Railway uses gunicorn)
+    port = int(os.getenv("PORT", 8080))
+    app.run(host="0.0.0.0", port=port, debug=True)
