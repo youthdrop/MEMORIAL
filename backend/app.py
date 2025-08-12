@@ -1,70 +1,70 @@
-try:
-    from .spa_static import register_spa
-except ImportError:
-    from spa_static import register_spa
-
-# --- resilient imports so app works as package OR bare script ---
-try:
-    from .extensions import db, migrate
-except ImportError:
-    from extensions import db, migrate  # fallback if run without package
+# Resilient bootstrap: works whether imported as package (backend.app)
+# or executed as a script (bare module).
+import os, sys
+if __package__ in (None, ""):
+    sys.path.append(os.path.dirname(__file__))
+    from extensions import db, migrate  # noqa: E402
+    from routes.participants import bp as participants_bp  # noqa: E402
+    try:
+        from routes.nested import bp_nested  # noqa: E402
+    except Exception:
+        bp_nested = None
+    try:
+        from spa_static import register_spa  # noqa: E402
+    except Exception:
+        def register_spa(app):  # no-op if helper missing
+            pass
+else:
+    from .extensions import db, migrate  # noqa: E402
+    from .routes.participants import bp as participants_bp  # noqa: E402
+    try:
+        from .routes.nested import bp_nested  # noqa: E402
+    except Exception:
+        bp_nested = None
+    try:
+        from .spa_static import register_spa  # noqa: E402
+    except Exception:
+        def register_spa(app):
+            pass
 
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 
-# If you import blueprints, do it resiliently too:
+# Ensure models are registered in either context
 try:
-    from .routes.participants import bp as participants_bp
-except ImportError:
-    from routes.participants import bp as participants_bp
-
-# nested routes are optional; import if present
-try:
-    from .routes.nested import bp_nested
-except ImportError:
-    try:
-        from routes.nested import bp_nested
-    except Exception:
-        bp_nested = None
-
-import os
+    from . import models  # noqa: F401
+except Exception:
+    import models  # noqa: F401
 
 def create_app():
     app = Flask(__name__)
     CORS(app)
 
-    # config (Railway will set DATABASE_URL and your JWT secret)
+    # Runtime config (Railway sets DATABASE_URL / JWT_SECRET_KEY)
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///local.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "please-change-me")
 
+    # Init extensions
     db.init_app(app)
     migrate.init_app(app, db)
     JWTManager(app)
 
-    # ensure models are registered
-    try:
-        from . import models  # noqa: F401
-    except ImportError:
-        import models  # noqa: F401
-
-    # register blueprints
-    app.register_blueprint(participants_bp, url_prefix="/api")
-    if bp_nested:
-        app.register_blueprint(bp_nested)
-
+    # Healthcheck
     @app.get("/healthz")
     def healthz():
         return {"ok": True}
 
-    @app.get("/")
-    def index():
-        return {"ok": True, "service": "backend", "docs": ["/healthz", "/api/..."]}
+    # API blueprints
+    app.register_blueprint(participants_bp, url_prefix="/api")
+    if bp_nested:
+        app.register_blueprint(bp_nested)
 
+    # Serve the React SPA at /
     register_spa(app)
 
     return app
 
-# export app when run as "python backend/app.py"
+# Export app for gunicorn / flask run
 app = create_app()
