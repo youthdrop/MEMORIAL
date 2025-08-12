@@ -1,0 +1,22 @@
+cat > nixpacks.toml <<'EOF'
+providers = ["node"]  # we'll supply Python via nixPkgs
+
+[phases.setup]
+nixPkgs = ["python311", "python311Packages.pip", "python311Packages.virtualenv", "nodejs_20"]
+
+[phases.install]
+cmds = [
+  "python -m venv /app/.venv",
+  "/app/.venv/bin/pip install --upgrade pip",
+  "/app/.venv/bin/pip install -r backend/requirements.txt",
+  "cd frontend && npm ci"
+]
+
+[phases.build]
+cmds = [
+  "cd frontend && npm run build"
+]
+
+[start]
+cmd = "cd backend && /app/.venv/bin/flask --app app:app db upgrade || /app/.venv/bin/flask --app app:app db stamp head ; /app/.venv/bin/gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
+EOF

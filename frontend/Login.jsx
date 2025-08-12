@@ -1,3 +1,4 @@
+// frontend/src/pages/Login.jsx
 import { useState } from 'react'
 import { api, setToken } from '../api'
 
@@ -12,17 +13,33 @@ export default function Login({ onLoggedIn }){
     setError('')
     setLoading(true)
     try{
-      const res = await api('/auth/login', {
+      // backend route is /api/login, and api() adds the /api prefix for us
+      const res = await api('/login', {
         method: 'POST',
         body: JSON.stringify({ email, password })
       })
-      if(!res.ok){
-        setError('Invalid email or password')
+
+      if (!res.ok) {
+        // try to surface backend message if present
+        let msg = 'Invalid email or password'
+        try {
+          const j = await res.json()
+          if (j?.error) msg = j.error
+          if (j?.message) msg = j.message
+        } catch (_) {}
+        setError(msg)
         return
       }
+
       const data = await res.json()
+      if (!data?.access_token) {
+        setError('Login succeeded but no token returned')
+        return
+      }
       setToken(data.access_token)
       onLoggedIn(data.access_token)
+    } catch (err) {
+      setError('Network error. Please try again.')
     } finally {
       setLoading(false)
     }
@@ -67,6 +84,7 @@ export default function Login({ onLoggedIn }){
           )}
 
           <button
+            type="submit"
             className="w-full rounded-2xl px-4 py-2 font-medium bg-black text-white shadow hover:shadow-md transition disabled:opacity-60 disabled:cursor-not-allowed"
             disabled={loading}
           >

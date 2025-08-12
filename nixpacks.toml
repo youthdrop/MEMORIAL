@@ -9,8 +9,9 @@ cmds = [
 
 [build]
 cmds = [
-  "cd frontend && npm run build"
+  "cd frontend && VITE_API_BASE=/ npm run build"
 ]
+
 
 [start]
 cmd = "cd backend && gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
