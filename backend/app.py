@@ -1,3 +1,8 @@
+try:
+    from .spa_static import register_spa
+except ImportError:
+    from spa_static import register_spa
+
 # --- resilient imports so app works as package OR bare script ---
 try:
     from .extensions import db, migrate
@@ -56,6 +61,8 @@ def create_app():
     @app.get("/")
     def index():
         return {"ok": True, "service": "backend", "docs": ["/healthz", "/api/..."]}
+
+    register_spa(app)
 
     return app
 
