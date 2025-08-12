@@ -1,13 +1,8 @@
-providers = ["python"]  # we’ll still add Node via nixPkgs
-
-[phases.setup]
-# Install Python 3.11, pip, and Node 20
-nixPkgs = ["python311", "python311Packages.pip", "python311Packages.setuptools", "python311Packages.wheel", "nodejs_20"]
+# nixpacks.toml (repo root)
 
 [phases.install]
 cmds = [
   "python -m venv /app/.venv",
-  "/app/.venv/bin/pip install --upgrade pip",
   "/app/.venv/bin/pip install -r backend/requirements.txt",
   "cd frontend && npm ci"
 ]
@@ -18,4 +13,5 @@ cmds = [
 ]
 
 [start]
-cmd = "./run_migration.sh && cd backend && /app/.venv/bin/python -m gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
+# Try to align Alembic with existing tables (no script needed), then start
+cmd = "cd backend && /app/.venv/bin/python -m flask --app app:app db stamp head || true; /app/.venv/bin/python -m gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
