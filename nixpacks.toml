@@ -21,6 +21,4 @@ cmds = [
 ]
 
 [start]
-# Run migrations every deploy, then start Gunicorn (no 'activate' needed)
-cmd = "cd backend && ../.venv/bin/python -m flask db upgrade && ../.venv/bin/gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
- 
+cmd = "cd backend && ../.venv/bin/flask db upgrade || (../.venv/bin/flask db stamp head && echo 'Alembic stamped existing schema') ; ../.venv/bin/gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"

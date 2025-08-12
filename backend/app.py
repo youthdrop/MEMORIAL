@@ -151,7 +151,8 @@ def apiv1_alias():
 
 
 # --- Optional: auto-create tables & seed admin on first boot (Railway friendly) ---
-if os.getenv("AUTO_CREATE_DB", "1") == "1":
+# Dev-only convenience (avoid in production)
+if os.getenv("FLASK_ENV") == "development":
     with app.app_context():
         try:
             db.create_all()
@@ -161,16 +162,16 @@ if os.getenv("AUTO_CREATE_DB", "1") == "1":
                 db.session.add(u)
                 db.session.commit()
                 app.logger.info("Seeded admin user.")
-            app.logger.info("DB ready (auto-create).")
-        except Exception as e:
-            app.logger.exception("DB init failed on boot")
+            app.logger.info("DB ready (dev create_all).")
+        except Exception:
+            app.logger.exception("DB init failed on boot (dev)")
 
 
 # --- CLI seed (still handy locally) ---
 @app.cli.command("initdb")
 def initdb():
     with app.app_context():
-        db.create_all()
+        
         if not User.query.filter_by(email="admin@stocktonmemorial.org").first():
             u = User(name="Admin", email="admin@stocktonmemorial.org", role="admin")
             u.password_hash = bcrypt.generate_password_hash("ChangeMe123!").decode("utf-8")
