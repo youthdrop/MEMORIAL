@@ -1,4 +1,3 @@
-cat > Dockerfile <<'EOF'
 # ---- 1) Build frontend (Vite) ----
 FROM node:20-alpine AS fe
 WORKDIR /fe
@@ -28,4 +27,3 @@ COPY --from=fe /fe/dist ./frontend/dist
 WORKDIR /app/backend
 ENV PORT=8080
 CMD ["gunicorn","-b","0.0.0.0:8080","app:app"]
-EOF
