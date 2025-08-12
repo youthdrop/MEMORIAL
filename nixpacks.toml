@@ -1,24 +1,26 @@
-providers = ["python"]  # Node is provided via nixPkgs below
+providers = ["python"]  # Node comes via nixPkgs to avoid npm collisions
 
-[setup]
-# Install Python 3.11, virtualenv, and Node 20 for the frontend build
+[phases.setup]
+# Python 3.11 + virtualenv + Node 20 for the Vite build
 nixPkgs = ["python311", "python311Packages.virtualenv", "nodejs_20"]
 
-[install]
+[phases.install]
 cmds = [
-  # Create and use a local virtualenv
+  # Create project-local virtualenv at repo root
   "python -m venv .venv",
-  "bash -lc 'source .venv/bin/activate && pip install -r backend/requirements.txt'",
-  # Frontend deps
+  # Install backend deps into the venv
+  ".venv/bin/pip install -r backend/requirements.txt",
+  # Install frontend deps
   "cd frontend && npm ci"
 ]
 
-[build]
+[phases.build]
 cmds = [
   # Build the Vite frontend (outputs to frontend/dist)
   "cd frontend && npm run build"
 ]
 
 [start]
-# Apply migrations each deploy, then start Gunicorn
-cmd = "bash -lc 'source .venv/bin/activate && cd backend && FLASK_APP=app.py flask db upgrade && gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app'"
+# Run migrations every deploy, then start Gunicorn (no 'activate' needed)
+cmd = "cd backend && ../.venv/bin/python -m flask db upgrade && ../.venv/bin/gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
+ 
