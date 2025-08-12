@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api } from '../api'
+import api from '../api'
 import Drawer from '../components/Drawer.jsx'
 import ParticipantDetail from './ParticipantDetail.jsx'
 import AddressAutocomplete from '../components/AddressAutocomplete.jsx'

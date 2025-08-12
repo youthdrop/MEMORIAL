@@ -1,28 +1,27 @@
-// frontend/src/api.js
-const API_ORIGIN = import.meta.env.VITE_API_URL || window.location.origin; // prod uses same origin
-const API_PREFIX = '/api'; // all backend routes are mounted here
+// src/api.js
+import axios from 'axios'
 
-export async function api(path, options = {}) {
-  const token = localStorage.getItem('token');
-  return fetch(`${API_ORIGIN}${API_PREFIX}${path}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers
-    },
-    credentials: 'same-origin',
-    ...options
-  });
-}
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE || '',
+  timeout: 15000,
+  headers: { 'Content-Type': 'application/json' },
+})
 
-export function setToken(token) {
-  localStorage.setItem('token', token);
-}
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('token')
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
 
-export function getToken() {
-  return localStorage.getItem('token');
-}
+api.interceptors.response.use(
+  (res) => res,
+  (err) => {
+    if (err?.response?.status === 401) {
+      localStorage.removeItem('token')
+      // optional: window.location.href = '/login'
+    }
+    return Promise.reject(err)
+  }
+)
 
-export function clearToken() {
-  localStorage.removeItem('token');
-}
+export default api

@@ -1,6 +1,6 @@
 // src/pages/ParticipantDetail.jsx
 import { useEffect, useState, useRef } from 'react'
-import { api } from '../api'
+import api from '../api'
 
 const SERVICE_TYPES = ['group','one_on_one','counseling','telephone']
 const REFERRAL_STATUSES = ['referred','contacted','accepted','declined','completed']
