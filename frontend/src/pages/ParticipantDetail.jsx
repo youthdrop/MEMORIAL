@@ -29,29 +29,36 @@ export default function ParticipantDetail({ pid }){
     if (pid === undefined || pid === null) return
     setErr('')
     setLoading(true)
-    setP(null) // gate UI until the main record loads
+    setP(null)
 
     try {
       // 1) MUST succeed: participant record
-      const a = await api(`/participants/${pid}`)
-      if (!a.ok) throw new Error(`Failed to load participant (${a.status})`)
-      const pj = await a.json()
+      const a = await api.get(`/api/participants/${pid}`)
       if (!mounted.current) return
+      const pj = a.data
       setP(pj)
-      setEditForm(pj)
+      setEditForm({
+        first_name: pj.first_name || '',
+        last_name: pj.last_name || '',
+        dob: pj.dob || '',
+        race: pj.race || '',
+        address: pj.address || '',
+        email: pj.email || '',
+        phone: pj.phone || ''
+      })
 
-      // 2) Kick off the rest; failures here won't block the header
+      // 2) Load related data (non-blocking)
       Promise.allSettled([
-        api(`/participants/${pid}/casenotes`).then(r=>r.ok ? r.json() : []).then(v=>mounted.current && setNotes(v || [])),
-        api(`/participants/${pid}/services`).then(r=>r.ok ? r.json() : []).then(v=>mounted.current && setServices(v || [])),
-        api(`/participants/${pid}/referrals`).then(r=>r.ok ? r.json() : []).then(v=>mounted.current && setReferrals(v || [])),
-        api(`/employers`).then(r=>r.ok ? r.json() : []).then(v=>mounted.current && setEmployers(v || [])),
-        api(`/providers`).then(r=>r.ok ? r.json() : []).then(v=>mounted.current && setProviders(v || [])),
+        api.get(`/api/participants/${pid}/notes`).then(r => mounted.current && setNotes(r.data || [])),
+        api.get(`/api/participants/${pid}/services`).then(r => mounted.current && setServices(r.data || [])),
+        api.get(`/api/participants/${pid}/referrals`).then(r => mounted.current && setReferrals(r.data || [])),
+        api.get(`/api/employers`).then(r => mounted.current && setEmployers(r.data || [])),
+        api.get(`/api/providers`).then(r => mounted.current && setProviders(r.data || [])),
       ]).catch(()=>{})
     } catch (e) {
       if (!mounted.current) return
       console.error('load participant failed:', e)
-      setErr(e.message || 'Failed to load participant')
+      setErr(e?.response?.data?.error || e.message || 'Failed to load participant')
     } finally {
       if (mounted.current) setLoading(false)
     }
@@ -60,43 +67,42 @@ export default function ParticipantDetail({ pid }){
   useEffect(()=>{ load() }, [pid])
 
   async function addCaseNote(){
-    if(!noteText.trim()) return
+    const content = noteText.trim()
+    if(!content) return
     try {
-      const r = await api(`/participants/${pid}/casenotes`, { method:'POST', body: JSON.stringify({ content: noteText }) })
-      if (r.status === 201) { setNoteText(''); load() }
-      else {
-        const t = await r.text().catch(()=> '')
-        alert(`Save note failed (${r.status}) ${t}`)
-      }
+      await api.post(`/api/participants/${pid}/notes`, { content })
+      setNoteText('')
+      // refresh only notes to keep UI snappy
+      const r = await api.get(`/api/participants/${pid}/notes`)
+      setNotes(r.data || [])
     } catch (e) {
-      alert(e.message || 'Save note failed')
+      const msg = e?.response?.data?.msg || e?.response?.data?.error || e.message || 'Save note failed'
+      alert(msg)
     }
   }
 
   async function addService(){
     try {
-      const r = await api(`/participants/${pid}/services`, { method:'POST', body: JSON.stringify(svc) })
-      if (r.status === 201) { setSvc({ service_type:'group', note:'' }); load() }
-      else {
-        const t = await r.text().catch(()=> '')
-        alert(`Save service failed (${r.status}) ${t}`)
-      }
+      await api.post(`/api/participants/${pid}/services`, svc)
+      setSvc({ service_type:'group', note:'' })
+      const r = await api.get(`/api/participants/${pid}/services`)
+      setServices(r.data || [])
     } catch (e) {
-      alert(e.message || 'Save service failed')
+      const msg = e?.response?.data?.msg || e?.response?.data?.error || e.message || 'Save service failed'
+      alert(msg)
     }
   }
 
   async function addReferral(){
     if(!refForm.org_id) return
     try {
-      const r = await api(`/participants/${pid}/referrals`, { method:'POST', body: JSON.stringify(refForm) })
-      if (r.status === 201) { setRefForm({ kind:'employer', org_id:'', status:'referred', note:'' }); load() }
-      else {
-        const t = await r.text().catch(()=> '')
-        alert(`Save referral failed (${r.status}) ${t}`)
-      }
+      await api.post(`/api/participants/${pid}/referrals`, refForm)
+      setRefForm({ kind:'employer', org_id:'', status:'referred', note:'' })
+      const r = await api.get(`/api/participants/${pid}/referrals`)
+      setReferrals(r.data || [])
     } catch (e) {
-      alert(e.message || 'Save referral failed')
+      const msg = e?.response?.data?.msg || e?.response?.data?.error || e.message || 'Save referral failed'
+      alert(msg)
     }
   }
 
@@ -108,20 +114,16 @@ export default function ParticipantDetail({ pid }){
       alert('Invalid email'); return
     }
     try {
-      // Try PATCH first (common for Flask APIs), then fallback to PUT once if 405
-      let r = await api(`/participants/${pid}`, { method:'PATCH', body: JSON.stringify(editForm) })
-      if (r.status === 405) {
-        r = await api(`/participants/${pid}`, { method:'PUT', body: JSON.stringify(editForm) })
-      }
-      if (!r.ok) {
-        const t = await r.text().catch(()=> '')
-        throw new Error(`Update failed (${r.status}) ${t}`)
-      }
+      // Your backend supports PUT (not PATCH)
+      await api.put(`/api/participants/${pid}`, editForm)
       setEditing(false)
-      load()
+      // Refresh the header only
+      const a = await api.get(`/api/participants/${pid}`)
+      setP(a.data)
     } catch (e) {
       console.error('saveEdit failed:', e)
-      alert(e.message || 'Update failed')
+      const msg = e?.response?.data?.msg || e?.response?.data?.error || e.message || 'Update failed'
+      alert(msg)
     }
   }
 
@@ -131,10 +133,7 @@ export default function ParticipantDetail({ pid }){
         <div className="rounded-md bg-red-50 p-3 text-sm text-red-700">
           Failed to load participant: {err}
         </div>
-        <button
-          className="rounded-2xl border px-3 py-1.5"
-          onClick={load}
-        >
+        <button className="rounded-2xl border px-3 py-1.5" onClick={load}>
           Retry
         </button>
       </div>
@@ -189,7 +188,11 @@ export default function ParticipantDetail({ pid }){
             {notes.map(n=>(
               <div key={n.id} className="border rounded-xl p-2">
                 <div className="text-sm">{n.content}</div>
-                {n.created_at && <div className="text-xs text-gray-500 mt-1">{new Date(n.created_at).toLocaleString()}</div>}
+                { (n.timestamp || n.created_at) &&
+                  <div className="text-xs text-gray-500 mt-1">
+                    {new Date(n.timestamp || n.created_at).toLocaleString()}
+                  </div>
+                }
               </div>
             ))}
           </div>
