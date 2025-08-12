@@ -2,7 +2,7 @@
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Participant, CaseNote, Service, Referral, Employer, Provider
+from ..models import db, Participant, CaseNote, Service, Referral, Employer, Provider
 
 bp = Blueprint("participants", __name__)
 
