@@ -18,4 +18,4 @@ cmds = [
 ]
 
 [start]
-cmd = "cd backend && /app/.venv/bin/python -m flask --app app:app db upgrade || (/app/.venv/bin/python -m flask --app app:app db stamp head) ; /app/.venv/bin/python -m gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
+cmd = "./run_migration.sh && cd backend && /app/.venv/bin/python -m gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
