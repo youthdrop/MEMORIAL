@@ -1,0 +1,91 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Reports</title>
+  <style>
+    body { font-family: system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Helvetica,Arial,sans-serif; margin: 24px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; margin-top: 16px; }
+    .card { padding: 16px; border-radius: 12px; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+    .label { font-size: 12px; opacity: .65; text-transform: uppercase; letter-spacing: .04em; }
+    .value { font-size: 28px; font-weight: 700; margin-top: 6px; }
+    .row { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+    input, button, a.btn { padding:10px 12px; border-radius:10px; border:1px solid #ddd; background:#fff; }
+    button, a.btn { cursor:pointer; border:1px solid #bbb; text-decoration:none; }
+    .muted { opacity:.7; }
+  </style>
+</head>
+<body>
+  <h1>Reports</h1>
+
+  <div class="row" style="margin: 8px 0 16px">
+    <label>From: <input id="from" type="date"></label>
+    <label>To: <input id="to" type="date"></label>
+    <button id="load">Load</button>
+    <a id="csvParticipants" class="btn" href="#">Download Participants CSV</a>
+    <a id="csvServices" class="btn" href="#">Download Services CSV</a>
+    <span id="status" class="muted"></span>
+  </div>
+
+  <div id="range" class="muted"></div>
+  <div class="grid" id="cards"></div>
+
+  <script>
+    const BASE = '/'; // backend is same origin and mounted at /api
+    const $ = sel => document.querySelector(sel);
+
+    function todayISO(d=new Date()){return d.toISOString().slice(0,10)}
+    function addDays(d, n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+
+    // default last 90 days
+    const toDefault = todayISO();
+    const fromDefault = todayISO(addDays(new Date(), -90));
+    $('#from').value = fromDefault;
+    $('#to').value = toDefault;
+
+    function setCSVLinks(from, to){
+      const qs = new URLSearchParams();
+      if (from) qs.set('from', from);
+      if (to) qs.set('to', to);
+      $('#csvParticipants').href = `${BASE}api/reports/participants.csv?${qs}`;
+      $('#csvServices').href = `${BASE}api/reports/services.csv?${qs}`;
+    }
+
+    async function load(){
+      const from = $('#from').value;
+      const to = $('#to').value;
+      setCSVLinks(from, to);
+      $('#status').textContent = 'Loading...';
+      try {
+        const qs = new URLSearchParams();
+        if (from) qs.set('from', from);
+        if (to) qs.set('to', to);
+        const res = await fetch(`${BASE}api/reports?${qs}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        $('#range').textContent = `Range: ${data.range.from} → ${data.range.to}`;
+        const t = data.totals || {};
+        const items = [
+          ['participants', t.participants ?? 0],
+          ['case_notes',   t.case_notes ?? 0],
+          ['services',     t.services ?? 0],
+          ['referrals',    t.referrals ?? 0],
+          ['employers',    t.employers ?? 0],
+          ['providers',    t.providers ?? 0],
+        ];
+        $('#cards').innerHTML = items.map(([k,v]) =>
+          `<div class="card"><div class="label">${k.replace('_',' ')}</div><div class="value">${v}</div></div>`
+        ).join('');
+        $('#status').textContent = '';
+      } catch (e) {
+        $('#status').textContent = 'Error loading report: ' + e.message;
+        $('#cards').innerHTML = '';
+      }
+    }
+
+    $('#load').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>
