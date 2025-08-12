@@ -1,6 +1,10 @@
 from flask import Blueprint, request, jsonify
-from ..models import db, CaseNote, Service, Assessment, Employment, Education, Milestone, Referral, Employer, Provider
 from flask_jwt_extended import get_jwt, jwt_required
+
+try:
+    from ..models import db, CaseNote, Service, Assessment, Employment, Education, Milestone, Referral, Employer, Provider
+except ImportError:
+    from models import db, CaseNote, Service, Assessment, Employment, Education, Milestone, Referral, Employer, Provider
 
 bp_nested = Blueprint('nested', __name__, url_prefix='/api/v1/participants/<int:pid>')
 
