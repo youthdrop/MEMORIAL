@@ -1,3 +1,4 @@
+cat > nixpacks.toml <<'TOML'
 [setup]
 nixPkgs = ["python311", "python311Packages.pip", "nodejs_20"]
 
@@ -12,6 +13,6 @@ cmds = [
   "cd frontend && VITE_API_BASE=/ npm run build"
 ]
 
-
 [start]
 cmd = "gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT backend.wsgi:app"
+TOML
