@@ -6,21 +6,23 @@ export default function Reports(){
   const [to, setTo] = useState('')
   const [enroll, setEnroll] = useState([])
   const [svcs, setSvcs] = useState([])
-  const [outs, setOuts] = useState([])
   const [refs, setRefs] = useState([])
 
   async function load(){
-    const qs = (from||to) ? `?start=${from||''}&end=${to||''}` : ''
-    const [a,b,c,d] = await Promise.all([
-      api(`/reports/enrollments${qs}`),
-      api(`/reports/services${qs}`),
-      api(`/reports/outcomes`),
-      api(`/reports/referrals`)
-    ])
-    if(a.ok) setEnroll(await a.json())
-    if(b.ok) setSvcs(await b.json())
-    if(c.ok) setOuts(await c.json())
-    if(d.ok) setRefs(await d.json())
+    const qs = (from || to) ? `?start=${from || ''}&end=${to || ''}` : ''
+    try {
+      const [a, b, d] = await Promise.all([
+        api.get(`/api/reports/enrollments${qs}`),
+        api.get(`/api/reports/services_by_type${qs}`),
+        api.get(`/api/reports/referrals`),
+      ])
+      setEnroll(a.data || [])
+      setSvcs(b.data || [])
+      setRefs(d.data || [])
+    } catch (e) {
+      console.error('reports load failed', e?.response?.data || e.message)
+      setEnroll([]); setSvcs([]); setRefs([])
+    }
   }
   useEffect(()=>{ load() },[])
 
@@ -46,18 +48,8 @@ export default function Reports(){
         <h3 className="font-semibold mb-2">Services by Type</h3>
         <div className="text-sm border rounded-xl overflow-hidden">
           <table className="w-full">
-            <thead><tr className="bg-gray-50 text-left text-gray-600"><th className="p-2">Service</th><th className="p-2">Date</th><th className="p-2">Count</th></tr></thead>
-            <tbody>{svcs.map((r,i)=>(<tr key={i} className="border-t"><td className="p-2">{r.service_type}</td><td className="p-2">{r.date}</td><td className="p-2">{r.count}</td></tr>))}</tbody>
-          </table>
-        </div>
-      </section>
-
-      <section>
-        <h3 className="font-semibold mb-2">Outcomes (Employment/Education)</h3>
-        <div className="text-sm border rounded-xl overflow-hidden">
-          <table className="w-full">
-            <thead><tr className="bg-gray-50 text-left text-gray-600"><th className="p-2">Kind</th><th className="p-2">Status</th><th className="p-2">Count</th></tr></thead>
-            <tbody>{outs.map((r,i)=>(<tr key={i} className="border-t"><td className="p-2">{r.kind}</td><td className="p-2">{r.status}</td><td className="p-2">{r.count}</td></tr>))}</tbody>
+            <thead><tr className="bg-gray-50 text-left text-gray-600"><th className="p-2">Service</th><th className="p-2">Count</th></tr></thead>
+            <tbody>{svcs.map((r,i)=>(<tr key={i} className="border-t"><td className="p-2">{r.service_type}</td><td className="p-2">{r.count}</td></tr>))}</tbody>
           </table>
         </div>
       </section>
