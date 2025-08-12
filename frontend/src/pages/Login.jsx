@@ -14,10 +14,12 @@ export default function Login({ onLoggedIn }) {
     setBusy(true)
     try {
       // Frontend calls /api/v1/auth/login; backend aliases it to /api/login
-      const res = await api('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email, password })
-      })
+      // frontend/src/pages/Login.jsx
+        const res = await api('/login', {
+          method: 'POST',
+          body: JSON.stringify({ email, password })
+        });
+
       if (!res.ok) {
         const t = await res.text().catch(()=> '')
         throw new Error(`Login failed (${res.status}) ${t}`)
