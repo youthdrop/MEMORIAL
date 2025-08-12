@@ -15,10 +15,12 @@ export default function Login({ onLoggedIn }) {
     try {
       // Frontend calls /api/v1/auth/login; backend aliases it to /api/login
       // frontend/src/pages/Login.jsx
+        // frontend/src/pages/Login.jsx
         const res = await api('/login', {
           method: 'POST',
           body: JSON.stringify({ email, password })
         });
+
 
       if (!res.ok) {
         const t = await res.text().catch(()=> '')
