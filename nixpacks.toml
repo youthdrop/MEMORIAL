@@ -1,17 +1,13 @@
 # nixpacks.toml
-
-# Let Nixpacks install both toolchains
 providers = ["python", "node"]
 
 [variables]
-# Pin versions
 NIXPACKS_PYTHON_VERSION = "3.11"
 NIXPACKS_NODE_VERSION   = "20"
 
 [phases.install]
 cmds = [
-  # Use Nixpacks' virtualenv pip
-  "/opt/venv/bin/pip install -r backend/requirements.txt",
+  "pip install -r backend/requirements.txt",
   "cd frontend && npm ci"
 ]
 
@@ -21,5 +17,5 @@ cmds = [
 ]
 
 [start]
-# Stamp alembic (no-op if already aligned) then start gunicorn from the venv
-cmd = "cd backend && /opt/venv/bin/flask --app app:app db stamp head || true; /opt/venv/bin/gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
+# Try migrations; if DB is already populated, stamp and continue.
+cmd = "cd backend && (flask --app app:app db upgrade || flask --app app:app db stamp head || true) ; gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
