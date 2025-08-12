@@ -21,4 +21,4 @@ cmds = [
 ]
 
 [start]
-cmd = "cd backend && ../.venv/bin/flask db upgrade || (../.venv/bin/flask db stamp head && echo 'Alembic stamped existing schema') ; ../.venv/bin/gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
+cmd = "cd backend && FLASK_APP=app:app flask db upgrade || (FLASK_APP=app:app flask db stamp head && echo 'Alembic stamped existing schema') ; gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
