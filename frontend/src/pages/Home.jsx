@@ -1,9 +1,10 @@
+// src/pages/Home.jsx
 import { useEffect, useState } from 'react'
-import { api, clearToken } from '../api'
+import api, { clearToken } from '../api'
 import AddressAutocomplete from '../components/AddressAutocomplete.jsx'
 import Drawer from '../components/Drawer.jsx'
 import ParticipantDetail from './ParticipantDetail.jsx'
-import Reports from './Reports.jsx' // 👈 add this
+import Reports from './Reports.jsx'
 
 const RACE_OPTIONS = [
   'American Indian or Alaska Native','Asian','Black or African American',
@@ -28,28 +29,50 @@ export default function Home(){
   const [selectedId, setSelectedId] = useState(null)
   const [selectedName, setSelectedName] = useState('')
 
-  const [showReports, setShowReports] = useState(false) // 👈 add this
+  const [showReports, setShowReports] = useState(false)
 
   async function load(){
-    const r = await api('/participants')
-    if(r.ok){ setItems(await r.json()) }
+    try {
+      const r = await api.get('/api/participants')
+      setItems(r.data || [])
+    } catch (e) {
+      console.error('load participants failed', e)
+      setItems([])
+    }
   }
   useEffect(()=>{ load() },[])
 
   async function createParticipant(){
-    const r = await api('/participants', { method:'POST', body: JSON.stringify(pForm) })
-    if(r.status === 201){ setShowAddP(false); setPForm(emptyP); load() }
-    else alert(`${r.status} ${r.statusText}\n` + await r.text())
+    try {
+      const r = await api.post('/api/participants', pForm)
+      if (r.status === 201) {
+        setShowAddP(false); setPForm(emptyP); load()
+      }
+    } catch (e) {
+      alert(e?.response?.data?.msg || e?.response?.data?.error || e.message || 'Failed to create participant')
+    }
   }
+
   async function createEmployer(){
-    const r = await api('/employers', { method:'POST', body: JSON.stringify(eForm) })
-    if(r.status === 201){ setShowAddEmp(false); setEForm(emptyE); alert('Employer saved') }
-    else alert(`${r.status} ${r.statusText}\n` + await r.text())
+    try {
+      const r = await api.post('/api/employers', eForm)
+      if (r.status === 201) {
+        setShowAddEmp(false); setEForm(emptyE); alert('Employer saved')
+      }
+    } catch (e) {
+      alert(e?.response?.data?.msg || e?.response?.data?.error || e.message || 'Failed to create employer')
+    }
   }
+
   async function createProvider(){
-    const r = await api('/providers', { method:'POST', body: JSON.stringify(prForm) })
-    if(r.status === 201){ setShowAddProv(false); setPrForm(emptyPr); alert('Provider saved') }
-    else alert(`${r.status} ${r.statusText}\n` + await r.text())
+    try {
+      const r = await api.post('/api/providers', prForm)
+      if (r.status === 201) {
+        setShowAddProv(false); setPrForm(emptyPr); alert('Provider saved')
+      }
+    } catch (e) {
+      alert(e?.response?.data?.msg || e?.response?.data?.error || e.message || 'Failed to create provider')
+    }
   }
 
   return (
@@ -58,7 +81,7 @@ export default function Home(){
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <h1 className="text-xl font-semibold">SMDROPIN MIS</h1>
           <div className="flex gap-2">
-            <button className="px-4 py-2 rounded-2xl border" onClick={()=>setShowReports(true)}>Reports</button> {/* 👈 added */}
+            <button className="px-4 py-2 rounded-2xl border" onClick={()=>setShowReports(true)}>Reports</button>
             <button className="px-4 py-2 rounded-2xl bg-black text-white" onClick={()=>setShowAddP(true)}>Add Participant</button>
             <button className="px-4 py-2 rounded-2xl border" onClick={()=>setShowAddEmp(true)}>Add Employer</button>
             <button className="px-4 py-2 rounded-2xl border" onClick={()=>setShowAddProv(true)}>Add Provider</button>
@@ -153,7 +176,6 @@ export default function Home(){
         {selectedId && <ParticipantDetail pid={selectedId} />}
       </Drawer>
 
-      {/* 👇 Reports Drawer */}
       <Drawer open={showReports} title="Reports" onClose={()=>setShowReports(false)}>
         <Reports />
       </Drawer>
