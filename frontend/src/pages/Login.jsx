@@ -1,6 +1,6 @@
-// src/pages/Login.jsx
+// frontend/src/pages/Login.jsx
 import { useState } from 'react'
-import { api, setToken as persistToken } from '../api'
+import api from '../api'  // default axios client
 
 export default function Login({ onLoggedIn }) {
   const [email, setEmail] = useState('')
@@ -8,34 +8,28 @@ export default function Login({ onLoggedIn }) {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  async function onSubmit(e){
+  async function onSubmit(e) {
     e.preventDefault()
     setError('')
     setBusy(true)
     try {
-      // Frontend calls /api/v1/auth/login; backend aliases it to /api/login
-      // frontend/src/pages/Login.jsx
-        // frontend/src/pages/Login.jsx
-        const res = await api('/login', {
-          method: 'POST',
-          body: JSON.stringify({ email, password })
-        });
-
-
-      if (!res.ok) {
-        const t = await res.text().catch(()=> '')
-        throw new Error(`Login failed (${res.status}) ${t}`)
-      }
-      const data = await res.json()
-      const token = data.access_token || data.token
+      // Your auth blueprint is registered under /api
+      const res = await api.post('/api/login', { email, password })
+      const token = res.data?.access_token || res.data?.token
       if (!token) throw new Error('No token returned by server')
 
-      // persist + notify App
-      persistToken(token)
+      // Store token in sessionStorage (logs out on browser close)
+      sessionStorage.setItem('token', token)
+
+      // Let App know we’re logged in
       onLoggedIn?.(token)
     } catch (err) {
-      console.error('login error:', err)
-      setError(err.message || 'Network error')
+      const msg =
+        err?.response?.data?.msg ||
+        err?.response?.data?.error ||
+        err?.message ||
+        'Login failed'
+      setError(msg)
     } finally {
       setBusy(false)
     }
@@ -61,6 +55,7 @@ export default function Login({ onLoggedIn }) {
             value={email}
             onChange={e=>setEmail(e.target.value)}
             required
+            autoComplete="username"
           />
         </label>
 
@@ -73,6 +68,7 @@ export default function Login({ onLoggedIn }) {
             value={password}
             onChange={e=>setPassword(e.target.value)}
             required
+            autoComplete="current-password"
           />
         </label>
 
