@@ -1,24 +1,21 @@
-providers = ["python"]  # Node comes via nixPkgs to avoid npm collisions
+providers = ["python"]  # we’ll still add Node via nixPkgs
 
 [phases.setup]
-# Python 3.11 + virtualenv + Node 20 for the Vite build
-nixPkgs = ["python311", "python311Packages.virtualenv", "nodejs_20"]
+# Install Python 3.11, pip, and Node 20
+nixPkgs = ["python311", "python311Packages.pip", "python311Packages.setuptools", "python311Packages.wheel", "nodejs_20"]
 
 [phases.install]
 cmds = [
-  # Create project-local virtualenv at repo root
-  "python -m venv .venv",
-  # Install backend deps into the venv
-  ".venv/bin/pip install -r backend/requirements.txt",
-  # Install frontend deps
+  "python -m venv /app/.venv",
+  "/app/.venv/bin/pip install --upgrade pip",
+  "/app/.venv/bin/pip install -r backend/requirements.txt",
   "cd frontend && npm ci"
 ]
 
 [phases.build]
 cmds = [
-  # Build the Vite frontend (outputs to frontend/dist)
   "cd frontend && npm run build"
 ]
 
 [start]
-cmd = "cd backend && FLASK_APP=app:app flask db upgrade || (FLASK_APP=app:app flask db stamp head && echo 'Alembic stamped existing schema') ; gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
+cmd = "cd backend && /app/.venv/bin/python -m flask --app app:app db upgrade || (/app/.venv/bin/python -m flask --app app:app db stamp head) ; /app/.venv/bin/python -m gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
