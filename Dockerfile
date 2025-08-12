@@ -1,44 +1,31 @@
-# --- Stage 1: build the React frontend ---
-FROM node:20-alpine AS frontend
-WORKDIR /app/frontend
-
-# install deps
+cat > Dockerfile <<'EOF'
+# ---- 1) Build frontend (Vite) ----
+FROM node:20-alpine AS fe
+WORKDIR /fe
 COPY frontend/package*.json ./
-RUN npm ci
-
-# build
-COPY frontend/ .
+RUN npm ci --no-audit --no-fund
+COPY frontend ./
 RUN npm run build
 
-
-# --- Stage 2: Python backend runtime ---
-FROM python:3.11-slim AS backend
+# ---- 2) Backend runtime (Flask/Gunicorn) ----
+FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1
-
 WORKDIR /app
 
-# system deps (for psycopg2/builds)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential curl \
-  && rm -rf /var/lib/apt/lists/*
+# Python deps
+COPY backend/requirements.txt ./backend/requirements.txt
+RUN pip install -r backend/requirements.txt
 
-# install backend deps
-COPY backend/requirements.txt backend/requirements.txt
-RUN python -m pip install --upgrade pip
-RUN pip install --no-cache-dir -r backend/requirements.txt
+# Backend code
+COPY backend ./backend
 
-# copy backend app code
-COPY backend/ backend/
+# Frontend build where app.py expects it: ../frontend/dist relative to backend/
+COPY --from=fe /fe/dist ./frontend/dist
 
-# copy built frontend into /app/frontend/dist (what your Flask app serves)
-COPY --from=frontend /app/frontend/dist ./frontend/dist
-
-# entrypoint to run migrations then start gunicorn
-COPY backend/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
-
+# Run
 WORKDIR /app/backend
-EXPOSE 8080
-CMD ["/entrypoint.sh"]
+ENV PORT=8080
+CMD ["gunicorn","-b","0.0.0.0:8080","app:app"]
+EOF
