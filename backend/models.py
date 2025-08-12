@@ -2,11 +2,22 @@
 from datetime import datetime
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
-from models import db, Participant, CaseNote, Service, Referral
 
-bp = Blueprint("participants", __name__)
+from models import (
+    db,
+    Participant,
+    CaseNote,
+    Service,
+    Referral,
+    Employer,
+    Provider,
+)
 
-# -------- helpers --------
+bp = Blueprint("participants", __name__)  # registered at /api in app.py
+
+
+# ---------- helpers ----------
+
 def _p_row(p: Participant):
     return {
         "id": p.id,
@@ -20,8 +31,14 @@ def _p_row(p: Participant):
         "name": f"{(p.first_name or '').strip()} {(p.last_name or '').strip()}".strip(),
     }
 
+
 def _note_row(n: CaseNote):
-    return {"id": n.id, "content": n.content, "created_at": n.created_at.isoformat()}
+    return {
+        "id": n.id,
+        "content": n.content,
+        "created_at": n.created_at.isoformat() if n.created_at else None,
+    }
+
 
 def _svc_row(s: Service):
     return {
@@ -31,40 +48,57 @@ def _svc_row(s: Service):
         "provided_at": s.provided_at.isoformat() if s.provided_at else None,
     }
 
+
 def _ref_row(r: Referral):
+    # resolve org name based on kind
     org_name = None
     if r.employer_id:
-        from models import Employer
         e = db.session.get(Employer, r.employer_id)
         org_name = e.name if e else None
-    if r.provider_id:
-        from models import Provider
+        kind = "employer"
+        org_id = r.employer_id
+    elif r.provider_id:
         pr = db.session.get(Provider, r.provider_id)
-        org_name = pr.name if pr else org_name
+        org_name = pr.name if pr else None
+        kind = "provider"
+        org_id = r.provider_id
+    else:
+        kind = None
+        org_id = None
 
     return {
         "id": r.id,
-        "kind": "employer" if r.employer_id else "provider",
-        "org_id": r.employer_id or r.provider_id,
+        "kind": kind,
+        "org_id": org_id,
         "org_name": org_name,
         "status": r.status,
         "note": r.note,
         "referred_at": r.referred_at.isoformat() if r.referred_at else None,
     }
 
-# -------- Participants CRUD --------
+
+def _parse_date(date_str: str):
+    """Parse YYYY-MM-DD to date or raise ValueError."""
+    return datetime.fromisoformat(date_str).date()
+
+
+# ---------- Participants CRUD ----------
 
 @bp.get("/participants")
 @jwt_required()
 def list_participants():
-    q = Participant.query.filter_by(is_active=True).order_by(Participant.last_name, Participant.first_name)
-    items = [_p_row(p) for p in q.all()]
-    return jsonify(items), 200
+    q = (
+        Participant.query.filter_by(is_active=True)
+        .order_by(Participant.last_name, Participant.first_name)
+    )
+    return jsonify([_p_row(p) for p in q.all()]), 200
+
 
 @bp.post("/participants")
 @jwt_required()
 def create_participant():
     data = request.get_json() or {}
+
     first = (data.get("first_name") or "").strip()
     last = (data.get("last_name") or "").strip()
     if not first or not last:
@@ -73,7 +107,7 @@ def create_participant():
     dob = None
     if data.get("dob"):
         try:
-            dob = datetime.fromisoformat(data["dob"]).date()
+            dob = _parse_date(data["dob"])
         except ValueError:
             return jsonify({"msg": "dob must be YYYY-MM-DD"}), 400
 
@@ -91,13 +125,16 @@ def create_participant():
     db.session.commit()
     return jsonify({"id": p.id}), 201
 
+
 @bp.get("/participants/<int:pid>")
 @jwt_required()
 def get_participant(pid):
     p = Participant.query.get_or_404(pid)
     return jsonify(_p_row(p)), 200
 
+
 @bp.put("/participants/<int:pid>")
+@bp.patch("/participants/<int:pid>")
 @jwt_required()
 def update_participant(pid):
     p = Participant.query.get_or_404(pid)
@@ -116,7 +153,7 @@ def update_participant(pid):
     if "dob" in data:
         if data["dob"]:
             try:
-                p.dob = datetime.fromisoformat(data["dob"]).date()
+                p.dob = _parse_date(data["dob"])
             except ValueError:
                 return jsonify({"msg": "dob must be YYYY-MM-DD"}), 400
         else:
@@ -129,6 +166,7 @@ def update_participant(pid):
     db.session.commit()
     return jsonify({"msg": "updated"}), 200
 
+
 @bp.delete("/participants/<int:pid>")
 @jwt_required()
 def delete_participant(pid):
@@ -137,14 +175,20 @@ def delete_participant(pid):
     db.session.commit()
     return jsonify({"msg": "deactivated"}), 200
 
-# -------- Case Notes --------
+
+# ---------- Case Notes ----------
 
 @bp.get("/participants/<int:pid>/notes")
 @jwt_required()
 def list_notes(pid):
     Participant.query.get_or_404(pid)
-    notes = CaseNote.query.filter_by(participant_id=pid).order_by(CaseNote.created_at.desc()).all()
+    notes = (
+        CaseNote.query.filter_by(participant_id=pid)
+        .order_by(CaseNote.created_at.desc())
+        .all()
+    )
     return jsonify([_note_row(n) for n in notes]), 200
+
 
 @bp.post("/participants/<int:pid>/notes")
 @jwt_required()
@@ -155,7 +199,7 @@ def create_note(pid):
     if not content:
         return jsonify({"msg": "content is required"}), 400
 
-    # optional: record staff_id from JWT if you include it in identity/claims
+    # If your JWT identity contains {"id": <user_id>} you can capture staff_id
     staff_id = None
     try:
         ident = get_jwt_identity()
@@ -167,16 +211,22 @@ def create_note(pid):
     n = CaseNote(participant_id=pid, staff_id=staff_id, content=content)
     db.session.add(n)
     db.session.commit()
-    return jsonify({"id": n.id, **_note_row(n)}), 201
+    return jsonify(_note_row(n) | {"id": n.id}), 201
 
-# -------- Services --------
+
+# ---------- Services ----------
 
 @bp.get("/participants/<int:pid>/services")
 @jwt_required()
 def list_services(pid):
     Participant.query.get_or_404(pid)
-    svcs = Service.query.filter_by(participant_id=pid).order_by(Service.provided_at.desc()).all()
+    svcs = (
+        Service.query.filter_by(participant_id=pid)
+        .order_by(Service.provided_at.desc())
+        .all()
+    )
     return jsonify([_svc_row(s) for s in svcs]), 200
+
 
 @bp.post("/participants/<int:pid>/services")
 @jwt_required()
@@ -186,6 +236,7 @@ def create_service(pid):
     service_type = (data.get("service_type") or "").strip()
     if not service_type:
         return jsonify({"msg": "service_type is required"}), 400
+
     s = Service(
         participant_id=pid,
         service_type=service_type,
@@ -194,16 +245,22 @@ def create_service(pid):
     )
     db.session.add(s)
     db.session.commit()
-    return jsonify({"id": s.id, **_svc_row(s)}), 201
+    return jsonify(_svc_row(s) | {"id": s.id}), 201
 
-# -------- Referrals --------
+
+# ---------- Referrals ----------
 
 @bp.get("/participants/<int:pid>/referrals")
 @jwt_required()
 def list_referrals(pid):
     Participant.query.get_or_404(pid)
-    refs = Referral.query.filter_by(participant_id=pid).order_by(Referral.referred_at.desc()).all()
+    refs = (
+        Referral.query.filter_by(participant_id=pid)
+        .order_by(Referral.referred_at.desc())
+        .all()
+    )
     return jsonify([_ref_row(r) for r in refs]), 200
+
 
 @bp.post("/participants/<int:pid>/referrals")
 @jwt_required()
@@ -225,4 +282,4 @@ def create_referral(pid):
     )
     db.session.add(r)
     db.session.commit()
-    return jsonify({"id": r.id, **_ref_row(r)}), 201
+    return jsonify(_ref_row(r) | {"id": r.id}), 201
