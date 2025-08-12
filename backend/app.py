@@ -53,6 +53,10 @@ def create_app():
     def healthz():
         return {"ok": True}
 
+    @app.get("/")
+    def index():
+        return {"ok": True, "service": "backend", "docs": ["/healthz", "/api/..."]}
+
     return app
 
 # export app when run as "python backend/app.py"
