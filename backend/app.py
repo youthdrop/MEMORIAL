@@ -1,3 +1,7 @@
+try:
+    from .routes.reports import bp_reports
+except Exception:
+    from routes.reports import bp_reports
 import os, sys
 
 # --- Resilient imports: package or bare script ---
@@ -20,7 +24,8 @@ if __package__ in (None, ""):
     try:
         from spa_static import register_spa
     except Exception:
-        def register_spa(app):  # no-op if helper missing
+        def app.register_blueprint(bp_reports, url_prefix="/api")
+    register_spa(app):  # no-op if helper missing
             pass
 else:
     from .extensions import db, migrate
@@ -40,7 +45,8 @@ else:
     try:
         from .spa_static import register_spa
     except Exception:
-        def register_spa(app):
+        def app.register_blueprint(bp_reports, url_prefix="/api")
+    register_spa(app):
             pass
 
 from flask import Flask
@@ -89,6 +95,7 @@ def create_app():
             pass
 
     # Serve React SPA at /
+    app.register_blueprint(bp_reports, url_prefix="/api")
     register_spa(app)
 
     return app
