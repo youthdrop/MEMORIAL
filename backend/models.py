@@ -1,5 +1,8 @@
 from datetime import datetime
-from .extensions import db
+try:
+    from .extensions import db
+except ImportError:
+    from extensions import db  # fallback if run as a script
 
 class User(db.Model):
     __tablename__ = "users"
@@ -66,6 +69,7 @@ class Referral(db.Model):
     note = db.Column(db.Text)
     referred_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
+# Optional tables some routes reference
 class Assessment(db.Model):
     __tablename__ = "assessments"
     id = db.Column(db.Integer, primary_key=True)
