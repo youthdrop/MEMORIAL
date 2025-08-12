@@ -1,124 +1,50 @@
-# routes/participants.py
-from flask import Blueprint, request, jsonify
-from datetime import datetime
-from models import db, Participant
-from utils import roles_required
-from flask_jwt_extended import jwt_required
+# inside backend/app.py (after create_app(), put these inside the function)
+@app.get('/api/participants/<int:pid>/notes')
+@jwt_required()
+def list_notes(pid):
+    Participant.query.get_or_404(pid)
+    return jsonify([]), 200
 
-bp = Blueprint('participants', __name__)  # ← no url_prefix here
-
-def _row(p: Participant):
-    return {
-        'id': p.id,
-        'name': f"{p.first_name} {p.last_name}".strip(),
-        'dob': p.dob.isoformat() if p.dob else None,
-        'race': p.race
-    }
-
-# ---- Create & List ----
-
-@bp.route('/participants', methods=['POST'])
-@roles_required('admin')
-def create_participant():
+@app.post('/api/participants/<int:pid>/notes')
+@jwt_required()
+def create_note(pid):
+    Participant.query.get_or_404(pid)
     data = request.get_json() or {}
-    first = (data.get('first_name') or '').strip()
-    last = (data.get('last_name') or '').strip()
-    if not first or not last:
-        return jsonify({'msg': 'first_name and last_name are required'}), 400
+    content = (data.get('content') or '').strip()
+    if not content:
+        return jsonify({'msg':'content is required'}), 400
+    # TODO: save to DB with CaseNote(...)
+    return jsonify({'msg':'created','id': None}), 201
 
-    email = (data.get('email') or '').strip()
-    if email and '@' not in email:
-        return jsonify({'msg': 'invalid email'}), 400
-
-    # parse dob safely
-    dob = None
-    if data.get('dob'):
-        try:
-            dob = datetime.fromisoformat(data['dob']).date()
-        except ValueError:
-            return jsonify({'msg': 'dob must be ISO date (YYYY-MM-DD)'}), 400
-
-    p = Participant(
-        first_name=first,
-        last_name=last,
-        dob=dob,
-        race=data.get('race'),
-        address=data.get('address'),
-        email=email,
-        phone=data.get('phone'),
-        is_active=True
-    )
-    db.session.add(p)
-    db.session.commit()
-    return jsonify({'id': p.id}), 201
-
-@bp.route('/participants', methods=['GET'])
+@app.get('/api/participants/<int:pid>/services')
 @jwt_required()
-def list_participants():
-    q = Participant.query.filter_by(is_active=True)
-    if request.args.get('paginated'):
-        page = int(request.args.get('page', 1))
-        per_page = min(int(request.args.get('per_page', 25)), 100)
-        p = q.order_by(Participant.last_name).paginate(page=page, per_page=per_page, error_out=False)
-        return jsonify({
-            'items': [_row(x) for x in p.items],
-            'page': p.page,
-            'per_page': p.per_page,
-            'total': p.total
-        })
-    items = q.order_by(Participant.last_name).all()
-    return jsonify([_row(p) for p in items])
+def list_services(pid):
+    Participant.query.get_or_404(pid)
+    return jsonify([]), 200
 
-# ---- Get / Update / Delete ----
-
-@bp.route('/participants/<int:pid>', methods=['GET'])
+@app.post('/api/participants/<int:pid>/services')
 @jwt_required()
-def get_participant(pid):
-    p = Participant.query.get_or_404(pid)
-    return jsonify({
-        'id': p.id,
-        'first_name': p.first_name,
-        'last_name': p.last_name,
-        'dob': p.dob.isoformat() if p.dob else None,
-        'race': p.race,
-        'address': p.address,
-        'email': p.email,
-        'phone': p.phone
-    })
-
-@bp.route('/participants/<int:pid>', methods=['PUT'])
-@jwt_required()
-def update_participant(pid):
-    p = Participant.query.get_or_404(pid)
+def create_service(pid):
+    Participant.query.get_or_404(pid)
     data = request.get_json() or {}
+    service_type = (data.get('service_type') or '').strip()
+    if not service_type:
+        return jsonify({'msg':'service_type is required'}), 400
+    # TODO: save to DB with Service(...)
+    return jsonify({'msg':'created','id': None}), 201
 
-    if 'first_name' in data and not (data['first_name'] or '').strip():
-        return jsonify({'msg': 'first_name cannot be empty'}), 400
-    if 'last_name' in data and not (data['last_name'] or '').strip():
-        return jsonify({'msg': 'last_name cannot be empty'}), 400
-    if 'email' in data and data['email'] and '@' not in data['email']:
-        return jsonify({'msg': 'invalid email'}), 400
+@app.get('/api/participants/<int:pid>/referrals')
+@jwt_required()
+def list_referrals(pid):
+    Participant.query.get_or_404(pid)
+    return jsonify([]), 200
 
-    for f in ['first_name', 'last_name', 'race', 'address', 'email', 'phone']:
-        if f in data:
-            setattr(p, f, data[f])
-
-    if 'dob' in data:
-        if data['dob']:
-            try:
-                p.dob = datetime.fromisoformat(data['dob']).date()
-            except ValueError:
-                return jsonify({'msg': 'dob must be ISO date (YYYY-MM-DD)'}), 400
-        else:
-            p.dob = None
-
-    db.session.commit()
-    return jsonify({'msg': 'updated'})
-
-@bp.route('/participants/<int:pid>', methods=['DELETE'])
-@roles_required('admin')
-def delete_participant(pid):
-    p = Participant.query.get_or_404(pid)
-    p.is_active = False
-    db.session.commit()
-    return jsonify({'msg': 'deactivated'})
+@app.post('/api/participants/<int:pid>/referrals')
+@jwt_required()
+def create_referral(pid):
+    Participant.query.get_or_404(pid)
+    data = request.get_json() or {}
+    if not data.get('org_id'):
+        return jsonify({'msg':'org_id is required'}), 400
+    # TODO: save to DB with Referral(...)
+    return jsonify({'msg':'created','id': None}), 201

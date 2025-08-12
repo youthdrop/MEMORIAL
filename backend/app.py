@@ -21,10 +21,13 @@ try:
 except Exception:
     bp_nested = None
 
+# register reports under /api/reports
 try:
-    from routes.reports import reports_bp
-except Exception:
-    reports_bp = None
+    from reports import reports_bp
+    app.register_blueprint(reports_bp, url_prefix="/api/reports")
+except Exception as e:
+    app.logger.info(f"reports_bp not registered: {e}")
+
 
 # .env is nice in dev; safe to skip in prod
 try:

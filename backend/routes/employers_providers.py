@@ -3,9 +3,9 @@ from models import db, Employer, Provider
 from flask_jwt_extended import jwt_required
 from utils import roles_required
 
-bp_ep = Blueprint('ep', __name__, url_prefix='/api/v1')
+bp_orgs = Blueprint('orgs', __name__)  # ← no url_prefix here
 
-@bp_ep.post('/employers')
+@bp_orgs.post('/employers')
 @roles_required('admin')
 def add_employer():
     d = request.get_json() or {}
@@ -20,22 +20,17 @@ def add_employer():
     db.session.commit()
     return jsonify({'id': e.id}), 201
 
-@bp_ep.get('/employers')
+@bp_orgs.get('/employers')
 @jwt_required()
 def list_employers():
     rows = Employer.query.order_by(Employer.name).all()
     return jsonify([
-        {
-            'id': r.id,
-            'name': r.name,
-            'contact_name': r.contact_name,
-            'phone': r.phone,
-            'email': r.email,
-            'address': r.address
-        } for r in rows
-    ])
+        {'id': r.id, 'name': r.name, 'contact_name': r.contact_name,
+         'phone': r.phone, 'email': r.email, 'address': r.address}
+        for r in rows
+    ]), 200
 
-@bp_ep.post('/providers')
+@bp_orgs.post('/providers')
 @roles_required('admin')
 def add_provider():
     d = request.get_json() or {}
@@ -50,17 +45,12 @@ def add_provider():
     db.session.commit()
     return jsonify({'id': p.id}), 201
 
-@bp_ep.get('/providers')
+@bp_orgs.get('/providers')
 @jwt_required()
 def list_providers():
     rows = Provider.query.order_by(Provider.name).all()
     return jsonify([
-        {
-            'id': r.id,
-            'name': r.name,
-            'contact_name': r.contact_name,
-            'phone': r.phone,
-            'email': r.email,
-            'address': r.address
-        } for r in rows
-    ])
+        {'id': r.id, 'name': r.name, 'contact_name': r.contact_name,
+         'phone': r.phone, 'email': r.email, 'address': r.address}
+        for r in rows
+    ]), 200
