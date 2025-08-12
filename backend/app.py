@@ -1,3 +1,7 @@
+try:
+    from .routes.more import bp_more
+except Exception:
+    from routes.more import bp_more
 import os, sys
 if __package__ in (None, ""):
     sys.path.append(os.path.dirname(__file__))
@@ -14,7 +18,8 @@ if __package__ in (None, ""):
     try:
         from spa_static import register_spa
     except Exception:
-        def register_spa(app): pass
+        def app.register_blueprint(bp_more, url_prefix="/api")
+    register_spa(app): pass
 else:
     from .extensions import db, migrate
     from .routes.participants import bp as participants_bp
@@ -29,7 +34,8 @@ else:
     try:
         from .spa_static import register_spa
     except Exception:
-        def register_spa(app): pass
+        def app.register_blueprint(bp_more, url_prefix="/api")
+    register_spa(app): pass
 
 from flask import Flask
 from flask_cors import CORS
@@ -66,6 +72,7 @@ def create_app():
         except Exception:
             pass
 
+    app.register_blueprint(bp_more, url_prefix="/api")
     register_spa(app)
     return app
 
