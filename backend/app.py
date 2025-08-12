@@ -1,59 +1,45 @@
-try:
-    from .routes.reports import bp_reports
-except Exception:
-    from routes.reports import bp_reports
 import os, sys
 
-# --- Resilient imports: package or bare script ---
+# --- Resilient imports: works as package or bare script ---
 if __package__ in (None, ""):
     sys.path.append(os.path.dirname(__file__))
     from extensions import db, migrate
     from routes.participants import bp as participants_bp
-    try:
-        from routes.more import bp_more
+    # optional blueprints
+    try: from routes.more import bp_more
+    except Exception: bp_more = None
+    try: from routes.geo import bp_geo
+    except Exception: bp_geo = None
+    try: from routes.auth import bp_auth
+    except Exception: bp_auth = None
+    try: from routes.reports import bp_reports
+    except Exception: bp_reports = None
+    # SPA helper
+    try: from spa_static import register_spa
     except Exception:
-        bp_more = None
-    try:
-        from routes.geo import bp_geo
-    except Exception:
-        bp_geo = None
-    try:
-        from routes.auth import bp_auth
-    except Exception:
-        bp_auth = None
-    try:
-        from spa_static import register_spa
-    except Exception:
-        def app.register_blueprint(bp_reports, url_prefix="/api")
-    register_spa(app):  # no-op if helper missing
+        def register_spa(app):  # no-op if helper missing
             pass
 else:
     from .extensions import db, migrate
     from .routes.participants import bp as participants_bp
-    try:
-        from .routes.more import bp_more
+    try: from .routes.more import bp_more
+    except Exception: bp_more = None
+    try: from .routes.geo import bp_geo
+    except Exception: bp_geo = None
+    try: from .routes.auth import bp_auth
+    except Exception: bp_auth = None
+    try: from .routes.reports import bp_reports
+    except Exception: bp_reports = None
+    try: from .spa_static import register_spa
     except Exception:
-        bp_more = None
-    try:
-        from .routes.geo import bp_geo
-    except Exception:
-        bp_geo = None
-    try:
-        from .routes.auth import bp_auth
-    except Exception:
-        bp_auth = None
-    try:
-        from .spa_static import register_spa
-    except Exception:
-        def app.register_blueprint(bp_reports, url_prefix="/api")
-    register_spa(app):
+        def register_spa(app):
             pass
 
 from flask import Flask
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 
-# Ensure models are imported so SQLAlchemy knows them
+# Ensure models are loaded so SQLAlchemy knows them
 try:
     from . import models  # noqa: F401
 except Exception:
@@ -63,7 +49,7 @@ def create_app():
     app = Flask(__name__)
     CORS(app)
 
-    # Config (Railway sets DATABASE_URL in prod)
+    # Config (Railway sets DATABASE_URL)
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "sqlite:///local.db")
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "please-change-me")
@@ -78,7 +64,7 @@ def create_app():
     def healthz():
         return {"ok": True}
 
-    # Register API blueprints
+    # --- Register API blueprints under /api ---
     app.register_blueprint(participants_bp, url_prefix="/api")
     if bp_more:
         app.register_blueprint(bp_more, url_prefix="/api")
@@ -86,8 +72,10 @@ def create_app():
         app.register_blueprint(bp_geo, url_prefix="/api")
     if bp_auth:
         app.register_blueprint(bp_auth, url_prefix="/api")
+    if bp_reports:
+        app.register_blueprint(bp_reports, url_prefix="/api")
 
-    # Create tables on first run (idempotent)
+    # Create tables on first run (safe if already present)
     with app.app_context():
         try:
             db.create_all()
@@ -95,10 +83,9 @@ def create_app():
             pass
 
     # Serve React SPA at /
-    app.register_blueprint(bp_reports, url_prefix="/api")
     register_spa(app)
 
     return app
 
-# WSGI entry
+# WSGI entrypoint
 app = create_app()
