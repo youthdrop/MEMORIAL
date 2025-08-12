@@ -1,21 +1,16 @@
-# nixpacks.toml
-providers = ["python", "node"]
+[setup]
+nixPkgs = ["python311", "python311Packages.pip", "nodejs_20"]
 
-[variables]
-NIXPACKS_PYTHON_VERSION = "3.11"
-NIXPACKS_NODE_VERSION   = "20"
-
-[phases.install]
+[install]
 cmds = [
   "pip install -r backend/requirements.txt",
   "cd frontend && npm ci"
 ]
 
-[phases.build]
+[build]
 cmds = [
   "cd frontend && npm run build"
 ]
 
 [start]
-# Try migrations; if DB is already populated, stamp and continue.
-cmd = "cd backend && (flask --app app:app db upgrade || flask --app app:app db stamp head || true) ; gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
+cmd = "cd backend && gunicorn -w 3 -k gthread -b 0.0.0.0:$PORT app:app"
